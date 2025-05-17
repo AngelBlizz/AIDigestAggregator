@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.cursor/
+mcp.json
 venv/
 ENV/
 env/
@@ -20,6 +22,7 @@ develop-eggs/
 lib/
 lib64/
 *.egg
+Documentation/
 
 # Databases
 *.db
