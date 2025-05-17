@@ -1,0 +1,119 @@
+# Инструкции по настройке и запуску AI News Digest Aggregator
+
+## 1. Настройка окружения
+
+### Создание файла .env
+Создайте файл `.env` в корневой директории проекта `/backend` со следующим содержимым:
+
+```
+# База данных
+POSTGRES_SERVER=localhost
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=yourpassword
+POSTGRES_DB=news_digest
+
+# Безопасность
+SECRET_KEY=your-very-secure-secret-key-here
+
+# API ключи для новостных источников
+NEWS_API_KEY=your-newsapi-key
+NYTIMES_API_KEY=your-nytimes-key
+
+# Redis (опционально, для кэширования и Celery)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+```
+
+### Получение API ключей
+
+1. **NewsAPI**:
+   - Зарегистрируйтесь на сайте https://newsapi.org/
+   - Получите бесплатный API ключ
+   - Вставьте его в значение NEWS_API_KEY в файле .env
+
+2. **New York Times API**:
+   - Зарегистрируйтесь на https://developer.nytimes.com/
+   - Создайте новое приложение и запросите ключ API для "Top Stories API"
+   - Вставьте его в значение NYTIMES_API_KEY в файле .env
+
+## 2. Запуск проекта
+
+### Установка зависимостей
+```
+pip install -r requirements.txt
+```
+
+### Запуск Redis (опционально, для полной функциональности)
+Для Windows:
+1. Скачайте Redis для Windows с https://github.com/microsoftarchive/redis/releases
+2. Запустите redis-server.exe
+
+Для Linux/Mac:
+```
+redis-server
+```
+
+### Запуск FastAPI-сервера
+```
+cd backend
+uvicorn app.main:app --reload
+```
+
+### Запуск Celery для фоновых задач (в отдельном терминале)
+```
+cd backend
+celery -A app.core.celery_app worker --loglevel=info
+```
+
+### Запуск Celery Beat для планировщика задач (в отдельном терминале)
+```
+cd backend
+celery -A app.core.celery_app beat --loglevel=info
+```
+
+## 3. Тестирование функциональности
+
+### Проверка системы
+```
+cd backend
+python diagnostic.py
+```
+
+### Проверка скрапера
+```
+cd backend
+python test_scraper.py
+```
+
+### Доступ к API
+После запуска сервера API будет доступен по адресу: http://localhost:8000
+
+Документация API: http://localhost:8000/docs
+
+## 4. Возможные проблемы и решения
+
+### Проблема подключения к Redis
+Если у вас возникают проблемы с подключением к Redis, система автоматически переключится на использование SQLite в качестве брокера для Celery. Это нормально для тестирования.
+
+### Проблемы с селекторами новостных сайтов
+Структура новостных сайтов может меняться со временем. Если какой-то источник не работает, проверьте его селекторы в `app/services/news_scraper.py`.
+
+### API ключи
+- Если вы не настроили API ключи, скрапер новостей всё равно будет работать, но агрегатор API не сможет получать новости через API.
+
+## 5. Настройка фронтенда (если есть)
+
+В данном проекте API реализован на бэкенде. Для взаимодействия с ним можно:
+1. Использовать Swagger UI документацию по адресу http://localhost:8000/docs
+2. Разработать фронтенд-приложение, которое будет взаимодействовать с API
+
+## 6. Настройка планировщика задач
+
+Текущая конфигурация:
+- Сбор новостей каждые 3 часа
+- Анализ статей каждые 30 минут
+- Генерация дайджестов ежедневно в 8:00
+
+Эти настройки можно изменить в файле `app/tasks/news_tasks.py`. 

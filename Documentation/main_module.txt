@@ -1,0 +1,194 @@
+# Документация main модуля
+
+## Описание
+
+Модуль `main.py` является точкой входа приложения и отвечает за настройку и запуск сервера FastAPI. В этом файле определяется главный объект приложения, настраиваются middleware, обработчики исключений и регистрируются все маршруты API.
+
+## Основные компоненты
+
+### 1. Инициализация приложения FastAPI
+
+```python
+app = FastAPI(
+    title="AI News Digest Aggregator",
+    description="An intelligent system for news content aggregation and analysis",
+    version=settings.VERSION,
+)
+```
+
+**Назначение**: Создает и настраивает экземпляр FastAPI с базовыми метаданными приложения.
+
+**Особенности**:
+- Заголовок и описание отображаются в документации Swagger/ReDoc
+- Версия приложения берется из настроек `settings.VERSION`
+- Настраиваются параметры документации API
+
+### 2. Настройка CORS
+
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Type"],
+    max_age=86400,
+)
+```
+
+**Назначение**: Настройка Cross-Origin Resource Sharing (CORS) для обеспечения доступа к API из веб-приложений, размещенных на других доменах.
+
+**Особенности**:
+- Список разрешенных источников зависит от окружения (разработка/продакшн)
+- Настраиваются разрешенные методы и заголовки HTTP
+- Настраивается кэширование предварительных запросов (preflight)
+
+### 3. Обработчики исключений
+
+```python
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for error in exc.errors():
+        errors.append({
+            "loc": ".".join([str(loc) for loc in error["loc"]]),
+            "msg": error["msg"]
+        })
+    
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation error", "errors": errors}
+    )
+```
+
+**Назначение**: Определяет обработчики для различных типов исключений, которые могут возникнуть в приложении.
+
+**Особенности**:
+- Преобразование исключений валидации в удобный для клиента формат
+- Единый формат ответов об ошибках
+- Возможность локализации сообщений об ошибках
+
+### 4. Регистрация маршрутов API
+
+```python
+app.include_router(api_router, prefix=settings.API_V1_STR)
+```
+
+**Назначение**: Подключает все маршруты API, определенные в модуле api.
+
+**Особенности**:
+- Все маршруты имеют общий префикс (например, `/api/v1`)
+- Роутеры из разных модулей объединяются в один главный роутер
+- Обеспечивает версионирование API
+
+### 5. Корневой эндпоинт
+
+```python
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to AI News Digest Aggregator API",
+        "version": settings.VERSION,
+        "status": "active"
+    } 
+```
+
+**Назначение**: Предоставляет базовую информацию о сервисе и проверяет его работоспособность.
+
+**Особенности**:
+- Служит для проверки работоспособности API
+- Возвращает актуальную версию приложения
+- Статус сервера для мониторинга
+
+## Инициализация БД при запуске
+
+```python
+# Create tables at application startup
+create_tables()
+```
+
+**Назначение**: Обеспечивает создание всех необходимых таблиц в базе данных при запуске приложения.
+
+**Особенности**:
+- Вызывается однократно при старте сервера
+- Не перезаписывает существующие данные
+- Создает только отсутствующие таблицы
+
+## Безопасность и защита
+
+Модуль реализует несколько уровней защиты:
+
+1. **Trusted Host Middleware**: Разрешает запросы только от доверенных хостов
+2. **CORS**: Контролирует доступ с других источников
+3. **Валидация данных**: Проверка всех входящих данных через Pydantic-модели
+4. **Стандартизация ошибок**: Унифицированный формат сообщений об ошибках
+
+## Примечания по развертыванию
+
+1. **Настройка CORS для продакшена**:
+   - В продакшн-окружении следует указать точный список разрешенных доменов
+   - Не используйте `"*"` в качестве разрешенного источника в продакшене
+
+2. **Работа с Uvicorn/Gunicorn**:
+   ```
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+   или для продакшена:
+   ```
+   gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:8000
+   ```
+
+3. **Использование HTTPS**:
+   - В продакшн-окружении всегда используйте HTTPS
+   - Настройте обратный прокси (Nginx/Apache) с SSL-сертификатом
+   - Или используйте Uvicorn с SSL сертификатами
+
+4. **Управление процессами**:
+   - Используйте менеджеры процессов (Supervisor, systemd) для управления жизненным циклом приложения
+   - Настройте автоматический перезапуск при сбоях
+
+## Взаимодействие с другими модулями
+
+- **core**: Использует конфигурацию из `settings`
+- **api**: Подключает маршруты API через `api_router`
+- **db**: Инициализирует базу данных через `create_tables()`
+
+## Расширение функциональности
+
+1. **Добавление новых middleware**:
+   ```python
+   from starlette.middleware.base import BaseHTTPMiddleware
+   
+   class CustomMiddleware(BaseHTTPMiddleware):
+       async def dispatch(self, request, call_next):
+           # Действия до обработки запроса
+           response = await call_next(request)
+           # Действия после обработки запроса
+           return response
+   
+   app.add_middleware(CustomMiddleware)
+   ```
+
+2. **Настройка дополнительной документации API**:
+   ```python
+   app = FastAPI(
+       title="AI News Digest Aggregator",
+       description="An intelligent system for news content aggregation and analysis",
+       version=settings.VERSION,
+       docs_url="/docs",  # URL для Swagger UI
+       redoc_url="/redoc",  # URL для ReDoc
+       openapi_url="/openapi.json",  # URL для OpenAPI схемы
+       openapi_tags=[...]  # Метаданные для тегов
+   )
+   ```
+
+3. **Настройка логирования**:
+   ```python
+   import logging
+   
+   logging.basicConfig(
+       level=logging.INFO,
+       format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+   )
+   ``` 

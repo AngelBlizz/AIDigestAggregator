@@ -1,0 +1,249 @@
+import { RootState } from '../store';
+
+// Словарь переводов для русского языка
+export const russianTranslations: Record<string, string> = {
+  // Навигация
+  'Dashboard': 'Панель управления',
+  'Digests': 'Дайджесты',
+  'Advanced Search': 'Расширенный поиск',
+  'Topics': 'Темы',
+  'Analytics': 'Аналитика',
+  'Scraper': 'Сканер',
+  'Profile': 'Профиль',
+  'Logout': 'Выход',
+  'Login': 'Вход',
+  'Register': 'Регистрация',
+  'Home': 'Главная',
+  'Settings': 'Настройки',
+  'Generate Digest': 'Создать дайджест',
+  
+  // Общие элементы интерфейса
+  'Search': 'Поиск',
+  'Save': 'Сохранить',
+  'Cancel': 'Отмена',
+  'Delete': 'Удалить',
+  'Edit': 'Редактировать',
+  'Create': 'Создать',
+  'Submit': 'Отправить',
+  'Back': 'Назад',
+  'View': 'Просмотр',
+  'Close': 'Закрыть',
+  'Save Changes': 'Сохранить изменения',
+  'Showing': 'Показано',
+  'of': 'из',
+  'articles': 'статей',
+  'Items per page': 'Элементов на странице',
+  
+  // Заголовки страниц
+  'Welcome to Your Dashboard': 'Добро пожаловать в панель управления',
+  'Here\'s a summary of your content aggregation, digest statistics, and trending topics. Generate new digests or explore recent content.': 'Вот сводка агрегации контента, статистики дайджестов и актуальных тем. Создавайте новые дайджесты или просматривайте последний контент.',
+  'Search through all articles with powerful filters by topics, sources, date ranges and sentiment analysis.': 'Ищите среди всех статей с мощными фильтрами по темам, источникам, диапазонам дат и анализу тональности.',
+  'Your Profile': 'Ваш профиль',
+  'Manage your personal information, security settings, and preferences.': 'Управляйте своей личной информацией, настройками безопасности и предпочтениями.',
+  
+  // Авторизация и Регистрация
+  'Welcome back': 'С возвращением',
+  'Log in to your account to view your digests and explore content.': 'Войдите в свой аккаунт, чтобы просматривать дайджесты и исследовать контент.',
+  'Generate AI-powered content digests': 'Создавайте дайджесты контента на базе ИИ',
+  'Customize topics of interest': 'Настраивайте интересующие вас темы',
+  'Analyze sentiment and trends': 'Анализируйте тональность и тренды',
+  'Enter your credentials to access your account': 'Введите свои учетные данные для доступа к аккаунту',
+  'Email address': 'Email адрес',
+  'Password': 'Пароль',
+  'Forgot password?': 'Забыли пароль?',
+  'Logging in...': 'Выполняется вход...',
+  'OR': 'ИЛИ',
+  'Don\'t have an account?': 'Нет аккаунта?',
+  'Create Account': 'Создать аккаунт',
+  'AI Digest Aggregator': 'AI Агрегатор Дайджестов',
+  'All rights reserved': 'Все права защищены',
+  'Email is required': 'Email обязателен',
+  'Email is invalid': 'Email некорректен',
+  'Password is required': 'Пароль обязателен',
+  'Password must be at least 6 characters': 'Пароль должен быть не менее 6 символов',
+  'Login error:': 'Ошибка входа:',
+  
+  'Join AI Digest Aggregator': 'Присоединяйтесь к AI Агрегатору Дайджестов',
+  'Create an account to start generating personalized content digests.': 'Создайте аккаунт, чтобы начать создавать персонализированные дайджесты контента.',
+  'Create your account to get started': 'Создайте аккаунт, чтобы начать работу',
+  'Full Name': 'Полное имя',
+  'Confirm Password': 'Подтвердите пароль',
+  'By signing up, you agree to our': 'Регистрируясь, вы соглашаетесь с нашими',
+  'Terms of Service': 'Условиями использования',
+  'and': 'и',
+  'Privacy Policy': 'Политикой конфиденциальности',
+  'Already have an account?': 'Уже есть аккаунт?',
+  'Sign up': 'Зарегистрироваться',
+  'Registering...': 'Регистрация...',
+  'Name is required': 'Имя обязательно',
+  'Passwords do not match': 'Пароли не совпадают',
+  'Registration error:': 'Ошибка регистрации:',
+  'Please confirm your password': 'Пожалуйста, подтвердите пароль',
+  'You must agree to the Terms and Privacy Policy': 'Вы должны согласиться с Условиями использования и Политикой конфиденциальности',
+  
+  // Дайджесты
+  'Generate New Digest': 'Создать новый дайджест',
+  'Your Digests': 'Ваши дайджесты',
+  'Digest Generator': 'Генератор дайджестов',
+  'Customize Your Digest': 'Настройте ваш дайджест',
+  'Topic Selection': 'Выбор темы',
+  'Sources': 'Источники',
+  'Sources (Optional)': 'Источники (опционально)',
+  'Time Range': 'Временной диапазон',
+  'Maximum Articles': 'Максимальное количество статей',
+  'Content Analysis Options': 'Параметры анализа контента',
+  'Include Sentiment Analysis': 'Включить анализ тональности',
+  'Include Keywords Analysis': 'Включить анализ ключевых слов',
+  'Sentiment Range': 'Диапазон тональности',
+  'Generating...': 'Генерация...',
+  'days': 'дней',
+  'Create New': 'Создать новый',
+  'View Digest': 'Просмотр дайджеста',
+  'No digests available yet': 'Пока нет доступных дайджестов',
+  'Create your first AI-powered content digest to get started. You can select topics, choose sources, and customize settings.': 'Создайте свой первый дайджест контента с помощью ИИ, чтобы начать. Вы можете выбрать темы, источники и настроить параметры.',
+  'Generate Your First Digest': 'Создать первый дайджест',
+  'Recent Digests': 'Последние дайджесты',
+  
+  // Dashboard статистика
+  'Total Digests': 'Всего дайджестов',
+  'Unread Digests': 'Непрочитанные дайджесты',
+  'Topic Subscriptions': 'Подписки на темы',
+  'Articles This Week': 'Статей за неделю',
+  'Content Sentiment Analysis': 'Анализ тональности контента',
+  'No sentiment data available': 'Нет данных о тональности',
+  'Positive Content': 'Положительный контент',
+  'Neutral Content': 'Нейтральный контент',
+  'Negative Content': 'Отрицательный контент',
+  'Articles Analyzed': 'Проанализировано статей',
+  'View Detailed Analytics': 'Подробная аналитика',
+  'Trending Topics': 'Популярные темы',
+  'No trending topics available': 'Нет популярных тем',
+  'in the last week': 'за последнюю неделю',
+  'Manage Topic Preferences': 'Управление предпочтениями тем',
+  'Content Distribution by Topic': 'Распределение контента по темам',
+  'No topic distribution data available': 'Нет данных о распределении тем',
+  'Recent Articles': 'Последние статьи',
+  'No recent articles available': 'Нет последних статей',
+  'No summary available': 'Нет доступного резюме',
+  
+  // Темы
+  'My Topics': 'Мои темы',
+  'Add Topic': 'Добавить тему',
+  'Create Custom Topic': 'Создать пользовательскую тему',
+  'Topic name': 'Название темы',
+  'Keywords': 'Ключевые слова',
+  
+  // Сканер
+  'Run Scraper': 'Запустить сканер',
+  'Available Sources': 'Доступные источники',
+  'Add Source': 'Добавить источник',
+  'Test Source': 'Тестировать источник',
+  'Recent Activity': 'Последняя активность',
+  
+  // Анализ статей
+  'Sentiment Score': 'Оценка тональности',
+  'Key Entities': 'Ключевые сущности',
+  'Related Articles': 'Похожие статьи',
+  'Readability': 'Читабельность',
+  'Very Positive': 'Очень позитивно',
+  'Positive': 'Позитивно',
+  'Neutral': 'Нейтрально',
+  'Negative': 'Негативно',
+  'Very Negative': 'Очень негативно',
+  'Original Source': 'Оригинальный источник',
+  'View Article': 'Просмотр статьи',
+  
+  // Поиск
+  'Sort By': 'Сортировать по',
+  'Sort Order': 'Порядок сортировки',
+  'Date Published': 'Дата публикации',
+  'Title': 'Заголовок',
+  'Source': 'Источник',
+  'Descending': 'По убыванию',
+  'Ascending': 'По возрастанию',
+  'Hide Filters': 'Скрыть фильтры',
+  'Show Filters': 'Показать фильтры',
+  'Clear Filters': 'Очистить фильтры',
+  'Last Days': 'Последние дни',
+  'Last 7 days': 'Последние 7 дней',
+  'Last 30 days': 'Последние 30 дней',
+  'Last 90 days': 'Последние 90 дней',
+  'Last year': 'Последний год',
+  'No articles found': 'Статьи не найдены',
+  'Try adjusting your search filters or search for different keywords.': 'Попробуйте изменить фильтры поиска или поискать по другим ключевым словам.',
+  
+  // Профиль
+  'Personal Information': 'Личная информация',
+  'Name': 'Имя',
+  'Email': 'Электронная почта',
+  'Change Password': 'Изменить пароль',
+  'Current Password': 'Текущий пароль',
+  'New Password': 'Новый пароль',
+  'Confirm New Password': 'Подтвердите новый пароль',
+  'Please enter your current password and choose a new secure password.': 'Пожалуйста, введите ваш текущий пароль и выберите новый безопасный пароль.',
+  'Password must be at least 8 characters long': 'Пароль должен содержать не менее 8 символов',
+  'New passwords do not match': 'Новые пароли не совпадают',
+  'Profile updated successfully': 'Профиль успешно обновлен',
+  'Failed to update profile': 'Не удалось обновить профиль',
+  'Password changed successfully': 'Пароль успешно изменен',
+  'Failed to change password': 'Не удалось изменить пароль',
+  'Language changed successfully': 'Язык успешно изменен',
+  'Member since': 'Пользователь с',
+  'Security': 'Безопасность',
+  'Language': 'Язык',
+  'Notifications': 'Уведомления',
+  'Preferences': 'Предпочтения',
+  'Language Settings': 'Языковые настройки',
+  'Choose your preferred language for the interface.': 'Выберите предпочтительный язык интерфейса.',
+  'Notification Settings': 'Настройки уведомлений',
+  'Notification settings will be available in future updates.': 'Настройки уведомлений будут доступны в будущих обновлениях.',
+  'Preference Settings': 'Настройки предпочтений',
+  'Additional preferences will be available in future updates.': 'Дополнительные настройки будут доступны в будущих обновлениях.',
+  
+  // Аналитика
+  'Content Distribution': 'Распределение контента',
+  'Sentiment Trends': 'Тенденции тональности',
+  'Source Distribution': 'Распределение источников',
+  'Reading Patterns': 'Схемы чтения',
+  'Export': 'Экспорт',
+  
+  // Сообщения и уведомления
+  'Success': 'Успешно',
+  'Error': 'Ошибка',
+  'Warning': 'Предупреждение',
+  'Info': 'Информация',
+  'Loading...': 'Загрузка...',
+  'No data available': 'Нет данных',
+  
+  // Статусы
+  'Read': 'Прочитано',
+  'Unread': 'Непрочитано',
+  'Mark as read': 'Отметить как прочитанное',
+  'All Digests': 'Все дайджесты',
+  
+  // Суперпользователь
+  'Admin Panel': 'Панель администратора',
+  'User Management': 'Управление пользователями',
+  'News Sources': 'Источники новостей',
+  'System Settings': 'Системные настройки',
+  'Content Moderation': 'Модерация контента',
+};
+
+// Функция для перевода текста на основе выбранного языка
+export const getTranslation = (text: string, language: string): string => {
+  if (language === 'ru' && russianTranslations[text]) {
+    return russianTranslations[text];
+  }
+  return text;
+};
+
+// Хук для использования в компонентах
+export const useTranslation = (state: RootState) => {
+  const { language } = state.settings;
+  
+  const translate = (text: string): string => {
+    return getTranslation(text, language);
+  };
+  
+  return { translate, language };
+}; 
