@@ -1,23 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, case
+from sqlalchemy import func, desc, and_, case, cast, Float
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 import json
 import csv
 import io
+import logging
 
 from app.db.session import get_db
 from app.core.security import get_current_user, get_current_active_superuser
-from app.models.models import User, Article, Topic, Digest
-from app.schemas.analytics import AnalyticsSummary, TopicDistribution, SentimentAnalytics, SourceAnalytics
+from app.models.models import User, Article, Topic, Digest, DigestArticle
+from app.schemas.analytics import AnalyticsSummary, TopicDistribution, SentimentAnalytics, SourceAnalytics, SentimentStats, TopicStats, SourceStats, EntityStats
 from app.core.cache import cached, invalidate_cache
+
+# Настраиваем логгирование
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.get("/summary", response_model=AnalyticsSummary)
 @cached(namespace="analytics.summary", ttl=1800)  # Кэш на 30 минут
-async def get_analytics_summary(
+def get_analytics_summary(
     days: int = Query(30, description="Число дней для включения в анализ"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -113,7 +117,7 @@ async def get_analytics_summary(
 
 @router.get("/topic-distribution", response_model=TopicDistribution)
 @cached(namespace="analytics.topics", ttl=1800)  # Кэш на 30 минут
-async def get_topic_distribution(
+def get_topic_distribution(
     days: int = Query(30, description="Число дней для включения в анализ"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -157,7 +161,7 @@ async def get_topic_distribution(
 
 @router.get("/sentiment-over-time", response_model=SentimentAnalytics)
 @cached(namespace="analytics.sentiment", ttl=1800)  # Кэш на 30 минут
-async def get_sentiment_over_time(
+def get_sentiment_over_time(
     days: int = Query(30, description="Число дней для включения в анализ"),
     interval: str = Query("day", description="Интервал для группировки (день, неделя, месяц)"),
     current_user: User = Depends(get_current_user),
@@ -207,7 +211,7 @@ async def get_sentiment_over_time(
 
 @router.get("/sources", response_model=SourceAnalytics)
 @cached(namespace="analytics.sources", ttl=1800)  # Кэш на 30 минут
-async def get_source_analytics(
+def get_source_analytics(
     days: int = Query(30, description="Число дней для включения в анализ"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -246,7 +250,7 @@ async def get_source_analytics(
     }
 
 @router.get("/export/csv")
-async def export_analytics_csv(
+def export_analytics_csv(
     days: int = Query(30, description="Число дней для включения в экспорт"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -311,7 +315,7 @@ async def export_analytics_csv(
     return response
 
 @router.get("/export/json")
-async def export_analytics_json(
+def export_analytics_json(
     days: int = Query(30, description="Число дней для включения в экспорт"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -379,4 +383,276 @@ async def export_analytics_json(
     response.headers["Content-Disposition"] = f"attachment; filename=analytics_export_{datetime.now().strftime('%Y%m%d')}.json"
     response.headers["Content-Type"] = "application/json"
     
-    return response 
+    return response
+
+@router.get("/sentiment", response_model=SentimentStats)
+def get_sentiment_stats(
+    days: int = Query(30, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Получение статистики по тональности статей.
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Получаем все статьи из дайджестов пользователя
+        user_digest_articles = (
+            db.query(Article)
+            .join(Article.digest_articles)
+            .join(DigestArticle.digest)
+            .filter(Digest.user_id == current_user.id)
+            .filter(Article.published_at >= cutoff_date)
+            .all()
+        )
+        
+        if not user_digest_articles:
+            logger.warning(f"Не найдено статей для анализа тональности за последние {days} дней")
+            # Возвращаем пустые данные
+            return {
+                "positive": 0,
+                "neutral": 0,
+                "negative": 0,
+                "total": 0,
+                "average_score": 0.0,
+                "distribution": []
+            }
+        
+        # Подсчитываем статистику
+        positive = sum(1 for article in user_digest_articles if article.sentiment_score and article.sentiment_score > 0.2)
+        negative = sum(1 for article in user_digest_articles if article.sentiment_score and article.sentiment_score < -0.2)
+        neutral = sum(1 for article in user_digest_articles if article.sentiment_score and -0.2 <= article.sentiment_score <= 0.2)
+        total = len(user_digest_articles)
+        
+        # Рассчитываем средний показатель тональности
+        scores = [article.sentiment_score for article in user_digest_articles if article.sentiment_score is not None]
+        average_score = sum(scores) / len(scores) if scores else 0.0
+        
+        # Создаем распределение тональности по дням
+        distribution = []
+        
+        # Группируем статьи по дате
+        date_groups = {}
+        for article in user_digest_articles:
+            if article.sentiment_score is None:
+                continue
+                
+            date_str = article.published_at.strftime("%Y-%m-%d")
+            if date_str not in date_groups:
+                date_groups[date_str] = []
+            date_groups[date_str].append(article.sentiment_score)
+        
+        # Рассчитываем среднюю тональность для каждого дня
+        for date_str, scores in date_groups.items():
+            avg_score = sum(scores) / len(scores)
+            distribution.append({
+                "date": date_str,
+                "score": avg_score
+            })
+        
+        # Сортируем распределение по дате
+        distribution.sort(key=lambda x: x["date"])
+        
+        return {
+            "positive": positive,
+            "neutral": neutral,
+            "negative": negative,
+            "total": total,
+            "average_score": average_score,
+            "distribution": distribution
+        }
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики тональности: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting sentiment stats: {str(e)}"
+        )
+
+@router.get("/topics", response_model=List[TopicStats])
+def get_topic_stats(
+    days: int = Query(30, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Получение статистики по темам.
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Получаем все статьи из дайджестов пользователя сгруппированные по темам
+        topic_counts = (
+            db.query(
+                Topic.id,
+                Topic.name,
+                func.count(Article.id).label("article_count")
+            )
+            .join(Article, Article.topic_id == Topic.id)
+            .join(Article.digest_articles)
+            .join(DigestArticle.digest)
+            .filter(Digest.user_id == current_user.id)
+            .filter(Article.published_at >= cutoff_date)
+            .group_by(Topic.id, Topic.name)
+            .all()
+        )
+        
+        if not topic_counts:
+            logger.warning(f"Не найдено статей для анализа тем за последние {days} дней")
+            return []
+        
+        # Рассчитываем общее количество статей
+        total_articles = sum(count for _, _, count in topic_counts)
+        
+        # Создаем статистику по темам
+        result = []
+        for topic_id, topic_name, article_count in topic_counts:
+            percentage = (article_count / total_articles) * 100 if total_articles > 0 else 0
+            result.append({
+                "topic_id": topic_id,
+                "topic_name": topic_name,
+                "article_count": article_count,
+                "percentage": round(percentage, 1)
+            })
+        
+        # Сортируем по количеству статей (по убыванию)
+        result.sort(key=lambda x: x["article_count"], reverse=True)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики тем: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting topic stats: {str(e)}"
+        )
+
+@router.get("/sources", response_model=List[SourceStats])
+def get_source_stats(
+    days: int = Query(30, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Получение статистики по источникам.
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Получаем все статьи из дайджестов пользователя сгруппированные по источникам
+        source_counts = (
+            db.query(
+                Article.source,
+                func.count(Article.id).label("article_count")
+            )
+            .join(Article.digest_articles)
+            .join(DigestArticle.digest)
+            .filter(Digest.user_id == current_user.id)
+            .filter(Article.published_at >= cutoff_date)
+            .group_by(Article.source)
+            .all()
+        )
+        
+        if not source_counts:
+            logger.warning(f"Не найдено статей для анализа источников за последние {days} дней")
+            return []
+        
+        # Рассчитываем общее количество статей
+        total_articles = sum(count for _, count in source_counts)
+        
+        # Создаем статистику по источникам
+        result = []
+        for source, article_count in source_counts:
+            percentage = (article_count / total_articles) * 100 if total_articles > 0 else 0
+            result.append({
+                "source": source,
+                "article_count": article_count,
+                "percentage": round(percentage, 1)
+            })
+        
+        # Сортируем по количеству статей (по убыванию)
+        result.sort(key=lambda x: x["article_count"], reverse=True)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики источников: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting source stats: {str(e)}"
+        )
+
+@router.get("/entities", response_model=List[EntityStats])
+def get_entity_stats(
+    days: int = Query(30, description="Number of days to analyze"),
+    entity_type: str = Query(None, description="Filter by entity type"),
+    limit: int = Query(10, description="Number of entities to return"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """
+    Получение статистики по именованным сущностям.
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        # Получаем все статьи из дайджестов пользователя
+        user_digest_articles = (
+            db.query(Article)
+            .join(Article.digest_articles)
+            .join(DigestArticle.digest)
+            .filter(Digest.user_id == current_user.id)
+            .filter(Article.published_at >= cutoff_date)
+            .all()
+        )
+        
+        if not user_digest_articles:
+            logger.warning(f"Не найдено статей для анализа сущностей за последние {days} дней")
+            return []
+        
+        # Собираем все сущности из статей
+        all_entities = []
+        for article in user_digest_articles:
+            if not article.entities:
+                continue
+                
+            try:
+                entities = json.loads(article.entities) if isinstance(article.entities, str) else article.entities
+                for entity in entities:
+                    if entity_type and entity.get("type") != entity_type:
+                        continue
+                    all_entities.append(entity)
+            except:
+                continue
+        
+        # Группируем сущности по имени и типу
+        entity_counts = {}
+        for entity in all_entities:
+            key = f"{entity['name']}|{entity['type']}"
+            if key in entity_counts:
+                entity_counts[key]["count"] += entity.get("count", 1)
+            else:
+                entity_counts[key] = {
+                    "name": entity["name"],
+                    "type": entity["type"],
+                    "count": entity.get("count", 1)
+                }
+        
+        # Преобразуем в список и сортируем по количеству
+        result = list(entity_counts.values())
+        result.sort(key=lambda x: x["count"], reverse=True)
+        
+        # Ограничиваем количество возвращаемых сущностей
+        return result[:limit]
+    except Exception as e:
+        logger.error(f"Ошибка при получении статистики сущностей: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting entity stats: {str(e)}"
+        ) 

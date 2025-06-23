@@ -2,23 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Any, Dict
+import logging
 
 from app.db.session import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password, get_current_user
-from app.models.models import User
+from app.models.models import User, Topic, UserTopic
 from app.schemas.user import UserCreate, UserResponse, Token, UserUpdate, AuthResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/test-auth")
-async def test_auth():
+def test_auth():
     """
     Тестовый эндпоинт для проверки доступности API авторизации
     """
     return {"message": "Авторизационное API работает корректно"}
 
 @router.post("/register", response_model=AuthResponse)
-async def register(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
+def register(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
     """
     Регистрация нового пользователя.
     """
@@ -42,6 +44,30 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
     db.commit()
     db.refresh(user)
     
+    # Добавляем базовые темы для пользователя
+    try:
+        # Получаем все общие темы
+        topics = db.query(Topic).all()
+        
+        # Добавляем пользователю базовые темы
+        for topic in topics:
+            user.topics.append(topic)
+            
+            # Также создаем персональную копию темы для пользователя
+            user_topic = UserTopic(
+                user_id=user.id,
+                name=topic.name,
+                description=topic.description,
+                keywords=topic.tags,  # Используем теги общей темы как ключевые слова для персональной темы
+                is_active=True
+            )
+            db.add(user_topic)
+        
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации тем пользователя: {str(e)}")
+    
     # Создаем токен доступа
     token = create_access_token(subject=user.id)
     
@@ -62,7 +88,7 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
     )
 
 @router.post("/login", response_model=AuthResponse)
-async def login(
+def login(
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db)
@@ -124,7 +150,7 @@ async def login(
         )
 
 @router.get("/profile", response_model=UserResponse)
-async def get_profile(current_user: User = Depends(get_current_user)) -> Any:
+def get_profile(current_user: User = Depends(get_current_user)) -> Any:
     """
     Получение профиля текущего пользователя.
     """
@@ -138,7 +164,7 @@ async def get_profile(current_user: User = Depends(get_current_user)) -> Any:
     )
 
 @router.put("/profile", response_model=UserResponse)
-async def update_profile(
+def update_profile(
     user_in: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

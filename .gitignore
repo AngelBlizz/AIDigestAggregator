@@ -22,7 +22,8 @@ develop-eggs/
 lib/
 lib64/
 *.egg
-Documentation/
+
+
 
 # Databases
 *.db
@@ -70,3 +71,8 @@ coverage.xml
 temp/
 .cache/
 .cursor/ 
+
+# Documentation
+Documentation/ 
+memory-bank/
+.cursorrules

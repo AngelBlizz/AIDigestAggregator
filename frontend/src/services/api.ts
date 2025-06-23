@@ -80,12 +80,24 @@ export const digestAPI = {
 // API Тем
 export const topicAPI = {
   getTopics: () => api.get('/topics'),
-  createTopic: (data: { name: string; description: string; category?: string }) =>
+  createTopic: (data: { name: string; description: string; category?: string; tags?: string }) =>
     api.post('/topics', data),
-  updateTopic: (id: number, data: { name?: string; description?: string; category?: string }) =>
+  updateTopic: (id: number, data: { name?: string; description?: string; category?: string; tags?: string }) =>
     api.put(`/topics/${id}`, data),
   deleteTopic: (id: number) => api.delete(`/topics/${id}`),
   toggleTopic: (id: number) => api.patch(`/topics/${id}/toggle`),
+};
+
+// API Персональных тем пользователя
+export const userTopicAPI = {
+  getUserTopics: () => api.get('/user-topics'),
+  createUserTopic: (data: { name: string; description: string; keywords?: string; is_active?: boolean }) =>
+    api.post('/user-topics', data),
+  updateUserTopic: (id: number, data: { name?: string; description?: string; keywords?: string; is_active?: boolean }) =>
+    api.put(`/user-topics/${id}`, data),
+  deleteUserTopic: (id: number) => api.delete(`/user-topics/${id}`),
+  copyFromTopic: (topicId: number) => api.post(`/user-topics/copy-from-topic/${topicId}`),
+  copyAllTopics: () => api.post('/user-topics/copy-all-topics'),
 };
 
 // API Статей
@@ -145,6 +157,17 @@ export const scraperAPI = {
   runScraper: (topic_id?: number) => api.post('/scraper/run', { topic_id }),
   runUserScraper: (topic_id?: number) => api.post('/scraper/run-user-scraper', { topic_id }),
   runAnalyzer: () => api.post('/scraper/analyze'),
+  runTopicModeling: (params?: { topic_id?: number; days?: number; num_topics?: number }) => 
+    api.post('/scraper/topic-modeling', null, { params }),
+  recategorizeArticles: () => api.post('/scraper/recategorize-articles'),
+  detectLanguage: (text: string) => api.get('/scraper/language-detection', { params: { text } }),
+};
+
+// API NLP-анализа
+export const nlpAPI = {
+  getTopicModeling: (params?: { topic_id?: number; days?: number; num_topics?: number }) => 
+    api.post('/scraper/topic-modeling', null, { params }),
+  detectLanguage: (text: string) => api.get('/scraper/language-detection', { params: { text } }),
 };
 
 export default api; 

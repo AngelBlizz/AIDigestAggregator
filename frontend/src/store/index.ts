@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice';
 import digestReducer from './slices/digestSlice';
 import topicReducer from './slices/topicSlice';
 import settingsReducer from './slices/settingsSlice';
+import userTopicReducer from './slices/userTopicSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     digest: digestReducer,
     topic: topicReducer,
     settings: settingsReducer,
+    userTopic: userTopicReducer,
   },
 });
 

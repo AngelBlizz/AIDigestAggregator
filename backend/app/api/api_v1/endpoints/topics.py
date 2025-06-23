@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Any, List
+import logging
+import json
 
 from app.db.session import get_db
 from app.core.security import get_current_user
-from app.models.models import User, Topic, user_topics
+from app.models.models import User, Topic, user_topics, Article
 from app.schemas.topic import TopicCreate, TopicResponse, TopicUpdate
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=List[TopicResponse])
-async def get_topics(
+def get_topics(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -30,7 +33,7 @@ async def get_topics(
     return topics
 
 @router.post("/", response_model=TopicResponse)
-async def create_topic(
+def create_topic(
     topic_in: TopicCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -46,10 +49,26 @@ async def create_topic(
             detail="Topic already exists"
         )
     
+    # Validate tags JSON if provided
+    if topic_in.tags:
+        try:
+            tags = json.loads(topic_in.tags)
+            if not isinstance(tags, list):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Tags must be a JSON array"
+                )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tags must be a valid JSON array"
+            )
+    
     # Create new topic
     topic = Topic(
         name=topic_in.name,
         description=topic_in.description,
+        tags=topic_in.tags
     )
     db.add(topic)
     db.commit()
@@ -61,7 +80,7 @@ async def create_topic(
     return topic
 
 @router.get("/{topic_id}", response_model=TopicResponse)
-async def get_topic(
+def get_topic(
     topic_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -82,7 +101,7 @@ async def get_topic(
     return topic
 
 @router.put("/{topic_id}", response_model=TopicResponse)
-async def update_topic(
+def update_topic(
     topic_id: int,
     topic_in: TopicUpdate,
     current_user: User = Depends(get_current_user),
@@ -98,11 +117,28 @@ async def update_topic(
             detail="Topic not found"
         )
     
+    # Validate tags JSON if provided
+    if topic_in.tags:
+        try:
+            tags = json.loads(topic_in.tags)
+            if not isinstance(tags, list):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Tags must be a JSON array"
+                )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tags must be a valid JSON array"
+            )
+    
     # Update topic fields
     if topic_in.name:
         topic.name = topic_in.name
-    if topic_in.description:
+    if topic_in.description is not None:
         topic.description = topic_in.description
+    if topic_in.tags is not None:
+        topic.tags = topic_in.tags
     
     db.add(topic)
     db.commit()
@@ -114,7 +150,7 @@ async def update_topic(
     return topic
 
 @router.patch("/{topic_id}/toggle", response_model=TopicResponse)
-async def toggle_topic(
+def toggle_topic(
     topic_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -146,7 +182,7 @@ async def toggle_topic(
     return topic
 
 @router.delete("/{topic_id}", response_model=TopicResponse)
-async def delete_topic(
+def delete_topic(
     topic_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -164,12 +200,31 @@ async def delete_topic(
             detail="Topic not found"
         )
     
-    # First remove all associations
-    if topic in current_user.topics:
-        current_user.topics.remove(topic)
-    
-    # Delete topic
-    db.delete(topic)
-    db.commit()
-    
-    return topic 
+    try:
+        # Проверяем наличие статей с этим топиком
+        articles_count = db.query(Article).filter(Article.topic_id == topic_id).count()
+        
+        if articles_count > 0:
+            # Обновляем статьи, устанавливая topic_id в NULL
+            db.query(Article).filter(Article.topic_id == topic_id).update({Article.topic_id: None})
+            logger.info(f"Обновлено {articles_count} статей при удалении топика {topic.name}")
+        
+        # Удаляем связи в таблице user_topics
+        db.execute(user_topics.delete().where(user_topics.c.topic_id == topic_id))
+        
+        # Удаляем связи в таблице digest_articles
+        from app.models.models import DigestArticle
+        db.query(DigestArticle).filter(DigestArticle.topic_id == topic_id).update({DigestArticle.topic_id: None})
+        
+        # Удаляем топик
+        db.delete(topic)
+        db.commit()
+        
+        return topic
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ошибка при удалении топика: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при удалении топика: {str(e)}"
+        ) 

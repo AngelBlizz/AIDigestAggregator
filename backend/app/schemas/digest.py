@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 import json
 
@@ -22,9 +22,9 @@ class ArticleResponse(ArticleBase):
     id: int
     created_at: datetime
     sentiment_score: Optional[float] = None
-    keywords: Optional[List[str]] = []
-    entities: Optional[List[Entity]] = []
-    key_phrases: Optional[List[str]] = []
+    keywords: List[str] = Field(default_factory=list)
+    entities: List[Entity] = Field(default_factory=list)
+    key_phrases: List[str] = Field(default_factory=list)
     sentiment_details: Optional[Dict[str, Any]] = None
     topic_id: int  # Добавляем топик для фильтрации
     
@@ -33,36 +33,45 @@ class ArticleResponse(ArticleBase):
         
     @classmethod
     def from_orm(cls, obj):
+        if obj is None:
+            return None
+            
+        # Создаем словарь с данными модели
+        data = {}
+        for field in cls.__fields__:
+            if hasattr(obj, field):
+                data[field] = getattr(obj, field)
+        
         # Преобразование строк JSON в объекты Python
         # Обработка ключевых слов
-        if isinstance(obj.keywords, str):
+        if isinstance(data.get('keywords'), str):
             try:
-                obj.keywords = json.loads(obj.keywords)
-            except:
-                obj.keywords = []
+                data['keywords'] = json.loads(data['keywords'])
+            except (json.JSONDecodeError, TypeError):
+                data['keywords'] = []
                 
         # Обработка сущностей
-        if isinstance(obj.entities, str):
+        if isinstance(data.get('entities'), str):
             try:
-                obj.entities = json.loads(obj.entities)
-            except:
-                obj.entities = []
+                data['entities'] = json.loads(data['entities'])
+            except (json.JSONDecodeError, TypeError):
+                data['entities'] = []
                 
         # Обработка ключевых фраз
-        if isinstance(obj.key_phrases, str):
+        if isinstance(data.get('key_phrases'), str):
             try:
-                obj.key_phrases = json.loads(obj.key_phrases)
-            except:
-                obj.key_phrases = []
+                data['key_phrases'] = json.loads(data['key_phrases'])
+            except (json.JSONDecodeError, TypeError):
+                data['key_phrases'] = []
                 
         # Обработка sentiment_details
-        if isinstance(obj.sentiment_details, str):
+        if isinstance(data.get('sentiment_details'), str):
             try:
-                obj.sentiment_details = json.loads(obj.sentiment_details)
-            except:
-                obj.sentiment_details = None
+                data['sentiment_details'] = json.loads(data['sentiment_details'])
+            except (json.JSONDecodeError, TypeError):
+                data['sentiment_details'] = None
                 
-        return super().from_orm(obj)
+        return cls(**data)
 
 # Параметры запроса для расширенного поиска статей
 class ArticleSearchParams(BaseModel):

@@ -18,7 +18,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DigestList from './pages/DigestList';
 import DigestDetail from './pages/DigestDetail';
-import TopicPreferences from './pages/TopicPreferences';
+import UserTopics from './pages/UserTopics';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 import Analytics from './pages/Analytics';
@@ -26,6 +26,7 @@ import AdvancedSearch from './pages/AdvancedSearch';
 import ScraperManager from './pages/ScraperManager';
 import ArticleDetail from './pages/ArticleDetail';
 import DigestGenerator from './pages/DigestGenerator';
+import NLPAnalytics from './pages/NLPAnalytics';
 
 function App() {
   return (
@@ -66,10 +67,13 @@ function App() {
               <Route path="search" element={<AdvancedSearch />} />
               
               {/* Topics route */}
-              <Route path="topics" element={<TopicPreferences />} />
+              <Route path="topics" element={<UserTopics />} />
               
               {/* Analytics route */}
               <Route path="analytics" element={<Analytics />} />
+              
+              {/* NLP Analytics route */}
+              <Route path="nlp-analytics" element={<NLPAnalytics />} />
               
               {/* Scraper management route */}
               <Route path="scraper" element={<ScraperManager />} />

@@ -30,11 +30,14 @@ import {
   InputLabel,
   Divider,
   SelectChangeEvent,
+  Tooltip,
+  AlertTitle
 } from '@mui/material';
 import { 
   Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
+  Update as UpdateIcon
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import {
@@ -44,8 +47,9 @@ import {
   setSelectedTopics,
   toggleTopic,
 } from '../store/slices/topicSlice';
-import { topicAPI } from '../services/api';
+import { topicAPI, scraperAPI } from '../services/api';
 import { useAppDispatch } from '../hooks';
+import { Link } from 'react-router-dom';
 
 // Define topic categories
 const TOPIC_CATEGORIES = [
@@ -59,7 +63,7 @@ const TOPIC_CATEGORIES = [
   { id: 'other', name: 'Other' }
 ];
 
-// Update the Topic interface to include category
+// Define the Topic interface with optional is_selected
 interface Topic {
   id: number;
   name: string;
@@ -67,11 +71,78 @@ interface Topic {
   category?: string;
 }
 
+// Define TopicFormData
 interface TopicFormData {
   name: string;
   description: string;
   category: string;
 }
+
+// Create a dedicated component for topic cards
+const TopicCard: React.FC<{
+  topic: Topic;
+  isSelected: boolean;
+  onToggle: (id: number) => void;
+  onEdit: (topic: Topic) => void;
+  onDelete: (id: number) => void;
+}> = ({ topic, isSelected, onToggle, onEdit, onDelete }) => (
+  <Grid item xs={12} sm={6} md={4}>
+    <Card variant="outlined" sx={{ position: 'relative' }}>
+      {isSelected && (
+        <Chip 
+          label="Выбрано" 
+          color="primary" 
+          size="small" 
+          sx={{ 
+            position: 'absolute', 
+            top: -10, 
+            right: 16,
+            zIndex: 1 
+          }} 
+        />
+      )}
+      <CardContent>
+        <Typography variant="h6" component="h2" gutterBottom>
+          {topic.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {topic.description}
+        </Typography>
+        {topic.category && (
+          <Chip 
+            label={TOPIC_CATEGORIES.find(cat => cat.id === topic.category)?.name || topic.category} 
+            size="small" 
+            sx={{ mt: 1 }} 
+          />
+        )}
+      </CardContent>
+      <CardActions>
+        <Switch
+          edge="end"
+          checked={isSelected}
+          onChange={() => onToggle(topic.id)}
+          inputProps={{ 'aria-labelledby': `topic-${topic.id}` }}
+        />
+        <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+          <IconButton 
+            size="small" 
+            color="primary" 
+            onClick={() => onEdit(topic)}
+          >
+            <EditIcon />
+          </IconButton>
+          <IconButton 
+            size="small" 
+            color="error" 
+            onClick={() => onDelete(topic.id)}
+          >
+            <DeleteIcon />
+          </IconButton>
+        </Box>
+      </CardActions>
+    </Card>
+  </Grid>
+);
 
 const TopicPreferences: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -89,6 +160,8 @@ const TopicPreferences: React.FC = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [topicToDelete, setTopicToDelete] = useState<number | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchTopics = async () => {
@@ -221,27 +294,45 @@ const TopicPreferences: React.FC = () => {
 
   // Group topics by category
   const getTopicsByCategory = () => {
-    const result: Record<string, Topic[]> = {};
+    const categorizedTopics: { [key: string]: Topic[] } = {};
     
-    // Initialize categories
-    TOPIC_CATEGORIES.forEach(cat => {
-      result[cat.id] = [];
+    // Initialize all categories with empty arrays
+    TOPIC_CATEGORIES.forEach(category => {
+      categorizedTopics[category.id] = [];
     });
     
-    // Group topics
-    topics.forEach((topic: Topic) => {
+    // Distribute topics by category
+    topics.forEach(topic => {
       const category = topic.category || 'other';
-      if (result[category]) {
-        result[category].push(topic);
+      if (categorizedTopics[category]) {
+        categorizedTopics[category].push(topic);
       } else {
-        result['other'].push(topic);
+        categorizedTopics['other'].push(topic);
       }
     });
     
-    return result;
+    return categorizedTopics;
   };
 
   const topicsByCategory = getTopicsByCategory();
+
+  const TopicHelpAlert = () => (
+    <Alert severity="info" sx={{ mb: 4 }}>
+      <AlertTitle>Как работать с темами</AlertTitle>
+      <Typography variant="body2" paragraph>
+        1. Создайте новую тему или выберите из существующих, нажав на переключатель "Выбрать"
+      </Typography>
+      <Typography variant="body2" paragraph>
+        2. Выбранные темы будут использоваться для сбора новостей и аналитики
+      </Typography>
+      <Typography variant="body2" paragraph>
+        3. После выбора тем, запустите скрапер через кнопку "Собрать новости" или на странице "Сбор данных"
+      </Typography>
+      <Typography variant="body2">
+        Важно: новости собираются только для выбранных тем (отмеченных как "Выбрано")
+      </Typography>
+    </Alert>
+  );
 
   if (loading) {
     return (
@@ -279,6 +370,31 @@ const TopicPreferences: React.FC = () => {
         Customize your news digest by selecting topics you're interested in. Toggle the switch to subscribe or unsubscribe.
       </Typography>
 
+      {Object.entries(topicsByCategory).map(([category, categoryTopics]) => (
+        categoryTopics.length > 0 && (
+          <Box key={category} sx={{ mb: 4 }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              {TOPIC_CATEGORIES.find(cat => cat.id === category)?.name || 'Other'}
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+            <Grid container spacing={3}>
+              {categoryTopics.map((topic) => (
+                <TopicCard
+                  key={topic.id}
+                  topic={topic}
+                  isSelected={selectedTopics.includes(topic.id)}
+                  onToggle={handleToggleTopic}
+                  onEdit={openEditDialog}
+                  onDelete={confirmDelete}
+                />
+              ))}
+            </Grid>
+          </Box>
+        )
+      ))}
+
+      <TopicHelpAlert />
+
       {topics.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -309,31 +425,55 @@ const TopicPreferences: React.FC = () => {
               <Grid container spacing={2}>
                 {categoryTopics.map((topic) => (
                   <Grid item xs={12} sm={6} md={4} key={topic.id}>
-                    <Card variant="outlined">
-                      <CardContent>
-                        <Box display="flex" justifyContent="space-between" alignItems="center">
-                          <Typography variant="h6" component="div">
-                            {topic.name}
+                    <Paper
+                      sx={{
+                        p: 2,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: '100%',
+                        position: 'relative',
+                        overflow: 'visible'
+                      }}
+                    >
+                      {selectedTopics.includes(topic.id) && (
+                        <Chip 
+                          label="Выбрано" 
+                          color="primary" 
+                          size="small" 
+                          sx={{ 
+                            position: 'absolute', 
+                            top: -10, 
+                            right: 16,
+                            zIndex: 1 
+                          }} 
+                        />
+                      )}
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Typography variant="h6" component="div">
+                              {topic.name}
+                            </Typography>
+                            <Switch
+                              checked={selectedTopics.includes(topic.id)}
+                              onChange={() => handleToggleTopic(topic.id)}
+                              color="primary"
+                            />
+                          </Box>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                            {topic.description}
                           </Typography>
-                          <Switch
-                            checked={selectedTopics.includes(topic.id)}
-                            onChange={() => handleToggleTopic(topic.id)}
-                            color="primary"
-                          />
-                        </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                          {topic.description}
-                        </Typography>
-                      </CardContent>
-                      <CardActions>
-                        <Button size="small" onClick={() => openEditDialog(topic)}>
-                          Edit
-                        </Button>
-                        <Button size="small" color="error" onClick={() => confirmDelete(topic.id)}>
-                          Delete
-                        </Button>
-                      </CardActions>
-                    </Card>
+                        </CardContent>
+                        <CardActions>
+                          <Button size="small" onClick={() => openEditDialog(topic)}>
+                            Edit
+                          </Button>
+                          <Button size="small" color="error" onClick={() => confirmDelete(topic.id)}>
+                            Delete
+                          </Button>
+                        </CardActions>
+                      </Card>
+                    </Paper>
                   </Grid>
                 ))}
               </Grid>
@@ -463,6 +603,48 @@ const TopicPreferences: React.FC = () => {
         onClose={handleCloseSnackbar}
         message={snackbarMessage}
       />
+
+      {/* Run scraper button */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between' }}>
+        <Button 
+          variant="contained" 
+          color="primary"
+          onClick={() => {
+            if (selectedTopics.length === 0) {
+              showSnackbar('Выберите хотя бы одну тему для сбора новостей');
+              return;
+            }
+            setIsSubmitting(true);
+            scraperAPI.runUserScraper()
+              .then(response => {
+                setSuccess('Сбор новостей запущен для выбранных тем');
+                setIsSubmitting(false);
+              })
+              .catch(err => {
+                showSnackbar('Ошибка запуска скрапера: ' + (err.response?.data?.message || err.message));
+                setIsSubmitting(false);
+              });
+          }}
+          disabled={isSubmitting || selectedTopics.length === 0}
+          startIcon={<UpdateIcon />}
+        >
+          Собрать новости для выбранных тем
+        </Button>
+        
+        <Button 
+          variant="outlined"
+          component={Link}
+          to="/scraper"
+        >
+          Перейти к странице сбора данных
+        </Button>
+      </Box>
+      
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
     </Box>
   );
 };

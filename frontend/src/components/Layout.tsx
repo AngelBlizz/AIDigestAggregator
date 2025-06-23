@@ -39,6 +39,7 @@ import {
   AddCircleOutlineOutlined as CreateIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
+  Psychology as PsychologyIcon,
 } from '@mui/icons-material';
 import { RootState } from '../store';
 import { logout } from '../store/slices/authSlice';
@@ -128,8 +129,9 @@ const Layout: React.FC = () => {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Digests', icon: <ArticleIcon />, path: '/digests' },
     { text: 'Advanced Search', icon: <SearchIcon />, path: '/search' },
-    { text: 'Topics', icon: <TopicIcon />, path: '/topics' },
+    { text: 'My Topics', icon: <TopicIcon />, path: '/topics' },
     { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
+    { text: 'NLP Analytics', icon: <PsychologyIcon />, path: '/nlp-analytics' },
     { text: 'Scraper', icon: <ScraperIcon />, path: '/scraper' },
     { text: 'Profile', icon: <ProfileIcon />, path: '/profile' },
   ];

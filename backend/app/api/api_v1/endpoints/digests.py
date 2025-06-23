@@ -7,7 +7,7 @@ import logging
 from app.db.session import get_db
 from app.core.security import get_current_user
 from app.models.models import User, Digest, DigestArticle, Article, Topic
-from app.schemas.digest import DigestResponse, DigestCreate, DigestListResponse, DigestStats, DigestGenerationParams
+from app.schemas.digest import DigestResponse, DigestCreate, DigestListResponse, DigestStats, DigestGenerationParams, ArticleResponse
 from app.services.digest_generator import DigestGenerator
 
 # Настраиваем логгирование
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.get("/", response_model=List[DigestListResponse])
-async def get_digests(
+def get_digests(
     skip: int = 0,
     limit: int = 10,
     status: Optional[str] = Query(None, description="Filter by status (read/unread)"),
@@ -38,7 +38,7 @@ async def get_digests(
     return digests
 
 @router.get("/stats", response_model=DigestStats)
-async def get_digest_stats(
+def get_digest_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -79,7 +79,7 @@ async def get_digest_stats(
     }
 
 @router.get("/{digest_id}", response_model=DigestResponse)
-async def get_digest(
+def get_digest(
     digest_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -87,16 +87,63 @@ async def get_digest(
     """
     Получение конкретного дайджеста по ID.
     """
-    digest = db.query(Digest).filter(Digest.id == digest_id, Digest.user_id == current_user.id).first()
-    if not digest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Digest not found"
+    try:
+        # Загружаем дайджест со связанными статьями
+        digest = db.query(Digest).filter(Digest.id == digest_id, Digest.user_id == current_user.id).first()
+        
+        if not digest:
+            logger.warning(f"Дайджест с ID={digest_id} не найден для пользователя {current_user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Digest not found"
+            )
+        
+        # Загружаем связанные статьи через DigestArticle с их полными данными
+        articles_with_data = (
+            db.query(Article)
+            .join(DigestArticle, DigestArticle.article_id == Article.id)
+            .filter(DigestArticle.digest_id == digest_id)
+            .order_by(DigestArticle.order)
+            .all()
         )
-    return digest
+        
+        logger.info(f"Загружено {len(articles_with_data)} статей для дайджеста {digest_id}")
+        
+        # Если статей нет, но дайджест существует, просто возвращаем дайджест с пустым списком статей
+        if not articles_with_data:
+            logger.warning(f"Дайджест с ID={digest_id} не содержит статей")
+            return DigestResponse(
+                id=digest.id,
+                title=digest.title,
+                created_at=digest.created_at,
+                is_read=digest.is_read,
+                articles=[]
+            )
+        
+        # Создаем новый объект DigestResponse для явного заполнения полей
+        # Важно преобразовать каждую статью через ArticleResponse.from_orm
+        processed_articles = [ArticleResponse.from_orm(article) for article in articles_with_data]
+        
+        response = DigestResponse(
+            id=digest.id,
+            title=digest.title,
+            created_at=digest.created_at,
+            is_read=digest.is_read,
+            articles=processed_articles
+        )
+        
+        return response
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке дайджеста {digest_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error loading digest: {str(e)}"
+        )
 
 @router.patch("/{digest_id}/read", response_model=DigestResponse)
-async def mark_digest_as_read(
+def mark_digest_as_read(
     digest_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -119,7 +166,7 @@ async def mark_digest_as_read(
     return digest
 
 @router.post("/generate", response_model=DigestResponse)
-async def generate_digest(
+def generate_digest(
     params: Optional[DigestGenerationParams] = Body(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -139,6 +186,7 @@ async def generate_digest(
     """
     # Проверяем наличие выбранных тем у пользователя
     if not current_user.topics:
+        logger.warning(f"Пользователь {current_user.id} ({current_user.email}) не выбрал ни одной темы")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No topics selected. Please select topics first."
@@ -149,15 +197,53 @@ async def generate_digest(
     
     # Если параметры не переданы, используем значения по умолчанию
     if not params:
+        logger.info(f"Параметры не указаны, используем значения по умолчанию для пользователя {current_user.id}")
         params = DigestGenerationParams()
     
-    # Создаем дайджест с указанными параметрами
-    digest = digest_generator.generate_digest_with_params(current_user.id, params)
+    # Логируем параметры генерации дайджеста
+    logger.info(f"Генерация дайджеста для пользователя {current_user.id} с параметрами: {params.dict()}")
     
-    if not digest:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No articles found that match your criteria. Try adjusting your parameters."
+    try:
+        # Создаем дайджест с указанными параметрами
+        digest = digest_generator.generate_digest_with_params(current_user.id, params)
+        
+        if not digest:
+            logger.warning(f"Не удалось создать дайджест для пользователя {current_user.id}: не найдено подходящих статей")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No articles found that match your criteria. Try adjusting your parameters."
+            )
+        
+        # Получаем связанные статьи
+        articles_with_data = (
+            db.query(Article)
+            .join(DigestArticle, DigestArticle.article_id == Article.id)
+            .filter(DigestArticle.digest_id == digest.id)
+            .order_by(DigestArticle.order)
+            .all()
         )
-    
-    return digest 
+        
+        # Преобразуем статьи через ArticleResponse.from_orm
+        processed_articles = [ArticleResponse.from_orm(article) for article in articles_with_data]
+        
+        # Создаем ответ с явным преобразованием статей
+        response = DigestResponse(
+            id=digest.id,
+            title=digest.title,
+            created_at=digest.created_at,
+            is_read=digest.is_read,
+            articles=processed_articles
+        )
+        
+        logger.info(f"Дайджест успешно создан: ID={digest.id}, статей={len(digest.articles) if hasattr(digest, 'articles') else 'N/A'}")
+        return response
+    except Exception as e:
+        logger.error(f"Ошибка при генерации дайджеста для пользователя {current_user.id}: {str(e)}")
+        # Логируем полный стек-трейс для отладки
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating digest: {str(e)}"
+        ) 

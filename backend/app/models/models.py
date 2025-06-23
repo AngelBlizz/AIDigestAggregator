@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.ext.hybrid import hybrid_property
 from app.db.base_class import Base
+import sqlalchemy as sa
 
 # Таблица ассоциации для многих-ко-многим отношения между пользователями и темами
 user_topics = Table(
@@ -27,6 +28,28 @@ class User(Base):
     # Relationships
     topics = relationship("Topic", secondary=user_topics, back_populates="users")
     digests = relationship("Digest", back_populates="user")
+    personal_topics = relationship("UserTopic", back_populates="user")
+
+class UserTopic(Base):
+    """Модель для персональных тем пользователей"""
+    __tablename__ = "user_personal_topics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, index=True)
+    description = Column(Text)
+    keywords = Column(Text)  # Ключевые слова для поиска, хранятся в формате JSON
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="personal_topics")
+    
+    # Уникальное ограничение: имя темы должно быть уникальным для каждого пользователя
+    __table_args__ = (
+        sa.UniqueConstraint('user_id', 'name', name='uix_user_topic_name'),
+    )
 
 class Topic(Base):
     __tablename__ = "topics"
@@ -36,6 +59,7 @@ class Topic(Base):
     description = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     category = Column(String, default="other")  # Добавляем категорию для тем
+    tags = Column(Text, nullable=True)  # Теги для улучшения парсинга, хранятся в формате JSON
     
     # Это используется для отслеживания, выбрана ли тема пользователем
     # Она не хранится в базе данных, а вычисляется во время выполнения
@@ -55,6 +79,7 @@ class Article(Base):
     source = Column(String)
     published_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     topic_id = Column(Integer, ForeignKey("topics.id"))
     
     # NLP Analysis fields
@@ -80,7 +105,12 @@ class Digest(Base):
 
     # Relationships
     user = relationship("User", back_populates="digests")
-    articles = relationship("DigestArticle", back_populates="digest")
+    digest_articles = relationship("DigestArticle", back_populates="digest")
+    
+    @property
+    def articles(self):
+        """Возвращает связанные статьи через digest_articles"""
+        return [da.article for da in self.digest_articles]
 
 class DigestArticle(Base):
     __tablename__ = "digest_articles"
@@ -93,9 +123,8 @@ class DigestArticle(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    digest = relationship("Digest", back_populates="articles")
+    digest = relationship("Digest", back_populates="digest_articles")
     article = relationship("Article", back_populates="digest_articles")
-    topic = relationship("Topic")
 
 class NewsSource(Base):
     __tablename__ = "news_sources"

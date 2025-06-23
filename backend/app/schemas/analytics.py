@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
+from datetime import datetime
 
 class TopicItem(BaseModel):
     name: str
@@ -8,6 +9,33 @@ class TopicItem(BaseModel):
 class SourceItem(BaseModel):
     name: str
     count: int
+
+class SentimentDistribution(BaseModel):
+    date: str
+    score: float
+
+class TimePeriod(BaseModel):
+    period: str
+    avg_sentiment: float
+    article_count: int
+
+class SentimentAnalytics(BaseModel):
+    positive_count: int
+    negative_count: int
+    neutral_count: int
+    average_sentiment: float
+    sentiment_over_time: List[Dict[str, Any]]
+
+class SourceAnalytics(BaseModel):
+    source: str
+    count: int
+    percentage: float
+
+class TopicDistribution(BaseModel):
+    topic_id: int
+    topic_name: str
+    count: int
+    percentage: float
 
 class AnalyticsSummary(BaseModel):
     total_articles: int
@@ -18,6 +46,9 @@ class AnalyticsSummary(BaseModel):
     neutral_articles: int
     most_popular_topics: List[TopicItem]
     most_active_sources: List[SourceItem]
+    topics_distribution: List[Dict[str, Any]]
+    sentiment_analytics: SentimentAnalytics
+    sources_analytics: List[SourceAnalytics]
 
 class TopicStat(BaseModel):
     id: int
@@ -25,24 +56,10 @@ class TopicStat(BaseModel):
     category: str
     article_count: int
 
-class TopicDistribution(BaseModel):
-    topics: List[TopicStat]
-
-class TimePeriod(BaseModel):
-    period: str
-    avg_sentiment: float
-    article_count: int
-
-class SentimentAnalytics(BaseModel):
-    time_periods: List[TimePeriod]
-
 class SourceStat(BaseModel):
     name: str
     article_count: int
     avg_sentiment: float
-
-class SourceAnalytics(BaseModel):
-    sources: List[SourceStat]
 
 class EntityFrequency(BaseModel):
     entity: str
@@ -57,4 +74,28 @@ class ContentAnalytics(BaseModel):
     total_words: int
     avg_article_length: int
     entities: List[EntityFrequency]
-    keywords: List[KeywordFrequency] 
+    keywords: List[KeywordFrequency]
+
+class SentimentStats(BaseModel):
+    positive: int
+    neutral: int
+    negative: int
+    total: int
+    average_score: float
+    distribution: List[SentimentDistribution]
+
+class TopicStats(BaseModel):
+    topic_id: int
+    topic_name: str
+    article_count: int
+    percentage: float
+
+class SourceStats(BaseModel):
+    source: str
+    article_count: int
+    percentage: float
+
+class EntityStats(BaseModel):
+    name: str
+    type: str
+    count: int 

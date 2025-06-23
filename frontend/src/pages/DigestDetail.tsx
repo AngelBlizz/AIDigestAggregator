@@ -17,13 +17,10 @@ import {
   CardActions,
   Tooltip,
   Snackbar,
-  Tab,
-  Tabs,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  LinearProgress,
   Collapse,
 } from '@mui/material';
 import { 
@@ -36,8 +33,6 @@ import {
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  AutoGraph as AnalyticsIcon,
-  KeyboardArrowRight as ArrowRightIcon,
   Language as LanguageIcon,
   EmojiObjects as InsightIcon,
   AccessTime as TimeIcon,
@@ -218,27 +213,51 @@ const DigestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { currentDigest: digest, loading, error } = useSelector((state: RootState) => state.digest);
+  const { currentDigest: digest, loading: loadingState, error: errorState } = useSelector((state: RootState) => state.digest);
+  const [loading, setLoading] = useState(loadingState);
+  const [error, setError] = useState<string | null>(errorState);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [savedArticles, setSavedArticles] = useState<number[]>([]);
   const [expandedArticles, setExpandedArticles] = useState<number[]>([]);
-  const [selectedTab, setSelectedTab] = useState<number>(0);
 
   useEffect(() => {
     const fetchDigest = async () => {
+      if (!id) return;
+      
+      dispatch(fetchDigestDetailStart());
+      setLoading(true);
+      setError(null);
+      
       try {
-        if (!id) return;
-        dispatch(fetchDigestDetailStart());
         const response = await digestAPI.getDigest(Number(id));
-        dispatch(fetchDigestDetailSuccess(response.data));
-      } catch (error) {
-        dispatch(fetchDigestDetailFailure('Failed to fetch digest'));
+        
+        if (response && response.data) {
+          dispatch(fetchDigestDetailSuccess(response.data));
+          
+          // Проверяем наличие статей в дайджесте
+          if (!response.data.articles || response.data.articles.length === 0) {
+            console.warn("Digest has no articles");
+            setError("Этот дайджест не содержит статей");
+          }
+        } else {
+          console.error("Failed to fetch digest: No data received");
+          setError("Не удалось загрузить данные дайджеста");
+          dispatch(fetchDigestDetailFailure("Failed to fetch digest"));
+        }
+      } catch (err) {
+        console.error("Error fetching digest:", err);
+        setError("Ошибка при загрузке дайджеста. Пожалуйста, попробуйте позже.");
+        dispatch(fetchDigestDetailFailure("Error fetching digest"));
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchDigest();
-  }, [dispatch, id]);
+    if (id) {
+      fetchDigest();
+    }
+  }, [id, dispatch]);
 
   const handleMarkAsRead = async () => {
     if (!digest) return;
@@ -288,10 +307,6 @@ const DigestDetail: React.FC = () => {
       navigator.clipboard.writeText(window.location.href);
       showSnackbar('Link copied to clipboard');
     }
-  };
-
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setSelectedTab(newValue);
   };
 
   const showSnackbar = (message: string) => {
@@ -439,98 +454,107 @@ const DigestDetail: React.FC = () => {
         </Grid>
       </Paper>
 
-      <Typography variant="h5" gutterBottom>
-        Articles
-      </Typography>
+      {/* Check for articles */}
+      {!digest.articles || digest.articles.length === 0 ? (
+        <Alert severity="info" sx={{ mt: 3 }}>
+          Этот дайджест не содержит статей. Возможно, скрапер не смог найти подходящие статьи или произошла ошибка при обработке.
+        </Alert>
+      ) : (
+        <>
+          <Typography variant="h5" gutterBottom>
+            Articles
+          </Typography>
 
-      {digest.articles.map((article, index) => (
-        <Card key={article.id} sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {article.title}
-            </Typography>
-            
-            <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
-              <Chip 
-                size="small" 
-                icon={<LanguageIcon fontSize="small" />}
-                label={`Source: ${article.source}`} 
-                variant="outlined" 
-              />
-              
-              {article.sentiment_score !== undefined && (
-                <Chip 
-                  size="small" 
-                  icon={article.sentiment_score > 0 ? <ThumbUpIcon /> : article.sentiment_score < 0 ? <ThumbDownIcon /> : undefined}
-                  label={getSentimentType(article.sentiment_score)}
-                  color={getSentimentColor(getSentimentType(article.sentiment_score))}
-                />
-              )}
-              
-              <Chip 
-                size="small" 
-                icon={<TimeIcon fontSize="small" />}
-                label={`Published: ${format(new Date(article.published_at), 'PPP')}`}
-                variant="outlined"
-              />
-            </Box>
-            
-            {article.summary && (
-              <Typography variant="body1" paragraph>
-                {article.summary}
-              </Typography>
-            )}
-            
-            {/* Article content is now in a collapsible section */}
-            <Collapse in={expandedArticles.includes(article.id)}>
-              <Box mb={3}>
-                <Typography variant="body2" color="text.secondary" paragraph>
-                  {article.content}
+          {digest.articles.map((article, index) => (
+            <Card key={article.id} sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {article.title}
                 </Typography>
-              </Box>
+                
+                <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
+                  <Chip 
+                    size="small" 
+                    icon={<LanguageIcon fontSize="small" />}
+                    label={`Source: ${article.source}`} 
+                    variant="outlined" 
+                  />
+                  
+                  {article.sentiment_score !== undefined && (
+                    <Chip 
+                      size="small" 
+                      icon={article.sentiment_score > 0 ? <ThumbUpIcon /> : article.sentiment_score < 0 ? <ThumbDownIcon /> : undefined}
+                      label={getSentimentType(article.sentiment_score)}
+                      color={getSentimentColor(getSentimentType(article.sentiment_score))}
+                    />
+                  )}
+                  
+                  <Chip 
+                    size="small" 
+                    icon={<TimeIcon fontSize="small" />}
+                    label={`Published: ${format(new Date(article.published_at), 'PPP')}`}
+                    variant="outlined"
+                  />
+                </Box>
+                
+                {article.summary && (
+                  <Typography variant="body1" paragraph>
+                    {article.summary}
+                  </Typography>
+                )}
+                
+                {/* Article content is now in a collapsible section */}
+                <Collapse in={expandedArticles.includes(article.id)}>
+                  <Box mb={3}>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      {article.content}
+                    </Typography>
+                  </Box>
+                  
+                  {/* Article analytics */}
+                  <Box mb={2}>
+                    <Divider sx={{ my: 2 }} />
+                    <ArticleAnalysis article={article} />
+                  </Box>
+                </Collapse>
+                
+              </CardContent>
               
-              {/* Article analytics */}
-              <Box mb={2}>
-                <Divider sx={{ my: 2 }} />
-                <ArticleAnalysis article={article} />
-              </Box>
-            </Collapse>
-            
-          </CardContent>
-          
-          <CardActions>
-            <Button 
-              size="small" 
-              component={Link} 
-              href={article.url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              color="primary"
-              sx={{ mr: 1 }}
-            >
-              Read Full Article
-            </Button>
-            
-            <IconButton 
-              size="small"
-              aria-label={expandedArticles.includes(article.id) ? 'show less' : 'show more'}
-              onClick={() => toggleArticleExpand(article.id)}
-            >
-              {expandedArticles.includes(article.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </IconButton>
-            
-            <IconButton 
-              size="small" 
-              onClick={() => handleSaveArticle(article.id)}
-              color={savedArticles.includes(article.id) ? "success" : "default"}
-              aria-label={savedArticles.includes(article.id) ? 'remove from bookmarks' : 'add to bookmarks'}
-              sx={{ ml: 'auto' }}
-            >
-              {savedArticles.includes(article.id) ? <BookmarkFilledIcon /> : <BookmarkIcon />}
-            </IconButton>
-          </CardActions>
-        </Card>
-      ))}
+              <CardActions>
+                <Button 
+                  size="small" 
+                  component={Link} 
+                  href={article.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  color="primary"
+                  sx={{ mr: 1 }}
+                >
+                  Read Full Article
+                </Button>
+                
+                <IconButton 
+                  size="small"
+                  aria-label={expandedArticles.includes(article.id) ? 'show less' : 'show more'}
+                  onClick={() => toggleArticleExpand(article.id)}
+                >
+                  {expandedArticles.includes(article.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+                
+                <IconButton 
+                  size="small" 
+                  onClick={() => handleSaveArticle(article.id)}
+                  color={savedArticles.includes(article.id) ? "success" : "default"}
+                  aria-label={savedArticles.includes(article.id) ? 'remove from bookmarks' : 'add to bookmarks'}
+                  sx={{ ml: 'auto' }}
+                >
+                  {savedArticles.includes(article.id) ? <BookmarkFilledIcon /> : <BookmarkIcon />}
+                </IconButton>
+              </CardActions>
+            </Card>
+          ))}
+        </>
+      )}
       
       <Snackbar
         open={snackbarOpen}

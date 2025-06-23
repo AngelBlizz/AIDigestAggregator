@@ -26,7 +26,7 @@ router = APIRouter()
 
 @router.get("/", response_model=Dict[str, Any])
 @cached(namespace="articles.search", ttl=600)  # Cache for 10 minutes
-async def search_articles(
+def search_articles(
     q: Optional[str] = Query(None, description="Search query in title, content or summary"),
     topic_id: Optional[int] = Query(None, description="Filter by topic ID"),
     topic_ids: Optional[str] = Query(None, description="Comma-separated list of topic IDs"),
@@ -38,13 +38,13 @@ async def search_articles(
     keyword: Optional[str] = Query(None, description="Filter by keyword"),
     entity: Optional[str] = Query(None, description="Filter by named entity"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type (PERSON, ORG, etc.)"),
-    days: Optional[int] = Query(7, description="Number of days to look back"),
+    days: Optional[int] = Query(7, description="Number of days to look back", ge=1, le=365),
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    sort_by: SortField = Query(SortField.date, description="Field to sort by"),
-    sort_order: SortOrder = Query(SortOrder.desc, description="Sort order (asc, desc)"),
-    skip: int = Query(0, description="Number of items to skip (for pagination)"),
-    limit: int = Query(20, description="Number of items to return"),
+    sort_by: str = Query("date", description="Field to sort by"),
+    sort_order: str = Query("desc", description="Sort order (asc, desc)"),
+    skip: int = Query(0, description="Number of items to skip (for pagination)", ge=0),
+    limit: int = Query(20, description="Number of items to return", ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -157,19 +157,31 @@ async def search_articles(
     # Get total count for pagination
     total = query.count()
     
-    # Apply sorting
-    if sort_by == SortField.date:
-        order_clause = Article.published_at.desc() if sort_order == SortOrder.desc else Article.published_at.asc()
+    # Apply sorting - переделаем, чтобы работало с текстовыми параметрами
+    sort_field = SortField.date
+    try:
+        sort_field = SortField(sort_by)
+    except ValueError:
+        sort_field = SortField.date
+        
+    sort_direction = SortOrder.desc
+    try:
+        sort_direction = SortOrder(sort_order)
+    except ValueError:
+        sort_direction = SortOrder.desc
+    
+    if sort_field == SortField.date:
+        order_clause = Article.published_at.desc() if sort_direction == SortOrder.desc else Article.published_at.asc()
         query = query.order_by(order_clause)
-    elif sort_by == SortField.title:
-        order_clause = Article.title.desc() if sort_order == SortOrder.desc else Article.title.asc()
+    elif sort_field == SortField.title:
+        order_clause = Article.title.desc() if sort_direction == SortOrder.desc else Article.title.asc()
         query = query.order_by(order_clause)
-    elif sort_by == SortField.source:
-        order_clause = Article.source.desc() if sort_order == SortOrder.desc else Article.source.asc()
+    elif sort_field == SortField.source:
+        order_clause = Article.source.desc() if sort_direction == SortOrder.desc else Article.source.asc()
         query = query.order_by(order_clause)
-    elif sort_by == SortField.sentiment:
+    elif sort_field == SortField.sentiment:
         # Handle null values for sentiment score in sorting
-        if sort_order == SortOrder.desc:
+        if sort_direction == SortOrder.desc:
             # Nulls last when descending
             query = query.order_by(func.coalesce(Article.sentiment_score, -2).desc())
         else:
@@ -201,7 +213,7 @@ async def search_articles(
 
 @router.get("/{article_id}", response_model=ArticleResponse)
 @cached(namespace="articles.detail", ttl=3600)  # Cache for 1 hour
-async def get_article(
+def get_article(
     article_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -219,7 +231,7 @@ async def get_article(
 
 @router.get("/sources/list", response_model=List[str])
 @cached(namespace="articles.sources", ttl=3600)  # Cache for 1 hour
-async def list_sources(
+def list_sources(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -231,7 +243,7 @@ async def list_sources(
 
 @router.get("/entity-types/list", response_model=List[str])
 @cached(namespace="articles.entity_types", ttl=86400)  # Cache for 24 hours
-async def list_entity_types(
+def list_entity_types(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:

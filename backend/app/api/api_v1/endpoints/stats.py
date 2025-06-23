@@ -12,7 +12,7 @@ from app.models.models import User, Article, Digest, DigestArticle, Topic
 router = APIRouter()
 
 @router.get("/sentiment")
-async def get_sentiment_stats(
+def get_sentiment_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
@@ -90,7 +90,7 @@ async def get_sentiment_stats(
     }
 
 @router.get("/topics")
-async def get_topic_stats(
+def get_topic_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:

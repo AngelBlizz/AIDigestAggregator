@@ -200,6 +200,17 @@ class NewsAggregator:
                 # Check if article already exists
                 existing = self.db.query(Article).filter(Article.url == article.get('url')).first()
                 if existing:
+                    # Вместо пропуска, обновляем существующую статью, если она изменилась
+                    try:
+                        # Обновляем только если содержимое изменилось
+                        if content and content != existing.content:
+                            existing.content = content
+                            existing.updated_at = datetime.now(timezone.utc)
+                            self.db.add(existing)
+                            processed_count += 1
+                            logger.info(f"Обновлена существующая статья: {existing.url}")
+                    except Exception as e:
+                        logger.error(f"Ошибка при обновлении существующей статьи {existing.url}: {str(e)}")
                     continue
 
                 # Extract content if not provided
@@ -256,6 +267,10 @@ class NewsAggregator:
                         logger.error(f"Database error during batch commit: {str(e)}")
                         self.db.rollback()
                 
+            except SQLAlchemyError as e:
+                logger.error(f"SQLAlchemy error processing article {article.get('url')}: {str(e)}")
+                # Если ошибка связана с уникальным ограничением, продолжаем с следующей статьей
+                self.db.rollback()
             except Exception as e:
                 logger.error(f"Error processing article {article.get('url')}: {str(e)}")
         
